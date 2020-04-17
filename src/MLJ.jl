@@ -1,112 +1,152 @@
 module MLJ
 
-# defined in include files:
-export @curve, @pcurve                               # utilities.jl
-export mav, rms, rmsl, rmslp1, rmsp                  # metrics.jl
-export misclassification_rate, cross_entropy         # metrics.jl
-export default_measure                               # metrics.jl
-export coerce, supervised, unsupervised              # tasks.jl
-export report                                        # machines.jl
-export Holdout, CV, evaluate!, Resampler             # resampling.jl
-export Params, params, set_params!                   # parameters.jl
-export strange, iterator                             # parameters.jl
-export Grid, TunedModel, learning_curve!             # tuning.jl
-export EnsembleModel                                 # ensembles.jl
-export ConstantRegressor, ConstantClassifier         # builtins/Constant.jl
-export models, localmodels, @load                    # loading.jl
-export KNNRegressor                                  # builtins/KNN.jl
 
-# defined in include files "machines.jl and "networks.jl":
-export Machine, NodalMachine, machine, AbstractNode
-export source, node, fit!, freeze!, thaw!, Node, sources
+## METHOD EXPORT
 
-# defined in include file "builtins/Transformers.jl":
-export FeatureSelector
-export UnivariateStandardizer, Standardizer
-export UnivariateBoxCoxTransformer
-export OneHotEncoder
-# export IntegerToInt64Transformer
-# export UnivariateDiscretizer, Discretizer
+export MLJ_VERSION
 
-# rexport from Random, Statistics, Distributions, CategoricalArrays:
-export pdf, mode, median, mean, shuffle!, categorical
+# utilities.jl:
+export @curve, @pcurve
 
-# reexport from MLJBase:
-export nrows, nfeatures, info
-export SupervisedTask, UnsupervisedTask, MLJTask
-export Deterministic, Probabilistic, Unsupervised, Supervised
-export DeterministicNetwork, ProbabilisticNetwork
-export Found, Continuous, Finite, Infinite    
-export OrderedFactor, Unknown
-export Count, Multiclass, Binary
-export scitype, scitype_union, scitypes
-export predict, predict_mean, predict_median, predict_mode
-export transform, inverse_transform, se, evaluate, fitted_params
-export @constant, @more, HANDLE_GIVEN_ID, UnivariateFinite
-export partition, X_and_y
-export load_boston, load_ames, load_iris, load_reduced_ames
-export load_crabs, datanow                
-export features, X_and_y
+# ensembles.jl:
+export EnsembleModel
 
-using MLJBase
+# model_matching.jl:
+export matching
 
-# to be extended:
-import MLJBase: fit, update, clean!
-import MLJBase: predict, predict_mean, predict_median, predict_mode
-import MLJBase: transform, inverse_transform, se, evaluate, fitted_params
-import MLJBase: show_as_constructed, params
 
-using RemoteFiles
-import Pkg.TOML
-#import Requires.@require  # lazy code loading package
-using  CategoricalArrays
-import Distributions: pdf, mode
-import Distributions
-import StatsBase
-using ProgressMeter
-import Tables
+## METHOD RE-EXPORT
 
-# to be extended:
-import Base.==
-import StatsBase.fit!
+# re-export from Random, Statistics, Distributions, CategoricalArrays:
+export pdf, mode, median, mean, shuffle!, categorical, shuffle,
+    levels, levels!, std, support, sampler
 
-# from Standard Library:
-using Statistics
-using LinearAlgebra
-using Random
+# re-exports from (MLJ)ScientificTypes via MLJBase
+export Scientific, Found, Unknown, Known, Finite, Infinite,
+       OrderedFactor, Multiclass, Count, Continuous, Textual,
+       Binary, ColorImage, GrayImage, Image, Table
+export scitype, scitype_union, elscitype, nonmissing, trait
+export coerce, coerce!, autotype, schema, info
+
+# re-export from MLJBase:
+export nrows, nfeatures, color_off, color_on,
+    selectrows, selectcols, restrict, corestrict, complement,
+    SupervisedTask, UnsupervisedTask, MLJTask,
+    Deterministic, Probabilistic, Unsupervised, Supervised, Static,
+    DeterministicNetwork, ProbabilisticNetwork,
+    target_scitype, input_scitype, output_scitype,
+    predict, predict_mean, predict_median, predict_mode,
+    transform, inverse_transform, evaluate, fitted_params, params,
+    @constant, @more, HANDLE_GIVEN_ID, UnivariateFinite,
+    classes, table, report, rebind!,
+    partition, unpack,
+    default_measure, measures,
+    @load_boston, @load_ames, @load_iris, @load_reduced_ames, @load_crabs,
+    load_boston, load_ames, load_iris, load_reduced_ames, load_crabs,
+    Machine, NodalMachine, machine, AbstractNode,
+    source, node, fit!, freeze!, thaw!, Node, sources, origins,
+    machines, sources, anonymize!, @from_network, fitresults,
+    @pipeline,
+    ResamplingStrategy, Holdout, CV,
+    StratifiedCV, evaluate!, Resampler, iterator,
+    default_resource, pretty,
+    OpenML
+
+export measures,
+    orientation, reports_each_observation,
+    is_feature_dependent, aggregation,
+    aggregate,
+    default_measure, value,
+    mav, mae, rms, rmsl, rmslp1, rmsp, l1, l2,
+    confusion_matrix, confmat,
+    cross_entropy, BrierScore,
+    misclassification_rate, mcr, accuracy,
+    balanced_accuracy, bacc, bac,
+    matthews_correlation, mcc,
+    auc, area_under_curve, roc_curve, roc,
+    TruePositive, TrueNegative, FalsePositive, FalseNegative,
+    TruePositiveRate, TrueNegativeRate, FalsePositiveRate, FalseNegativeRate,
+    FalseDiscoveryRate, Precision, NPV, FScore,
+    TPR, TNR, FPR, FNR,
+    FDR, PPV,
+    Recall, Specificity, BACC,
+    truepositive, truenegative, falsepositive, falsenegative,
+    true_positive, true_negative, false_positive, false_negative,
+    truepositive_rate, truenegative_rate, falsepositive_rate,
+    true_positive_rate, true_negative_rate, false_positive_rate,
+    falsenegative_rate, negativepredictive_value,
+    false_negative_rate, negative_predictive_value,
+    positivepredictive_value, positive_predictive_value,
+    tpr, tnr, fpr, fnr,
+    falsediscovery_rate, false_discovery_rate, fdr, npv, ppv,
+    recall, sensitivity, hit_rate, miss_rate,
+    specificity, selectivity, f1score, f1, fallout
+
+# re-export from MLJTuning:
+export Grid, RandomSearch, Explicit, TunedModel,
+    learning_curve!, learning_curve
+
+# re-export from MLJModels:
+export models, localmodels, @load, load, info,
+    ConstantRegressor, ConstantClassifier,     # builtins/Constant.jl
+    StaticTransformer, FeatureSelector,        # builtins/Transformers.jl
+    UnivariateStandardizer, Standardizer,
+    UnivariateBoxCoxTransformer,
+    OneHotEncoder, UnivariateDiscretizer,
+    FillImputer
+
+# re-export from ComputaionalResources:
+export CPU1, CPUProcesses, CPUThreads
+
+
+## METHOD IMPORT
+
+# from the Standard Library:
 import Distributed: @distributed, nworkers, pmap
-using RecipesBase # for plotting
+import Pkg
+import Pkg.TOML
 
-const srcdir = dirname(@__FILE__) # the directory containing this file:
+# from the MLJ universe:
+using MLJBase
+import MLJBase.save
+using MLJTuning
+using MLJModels
+
+using Tables, CategoricalArrays
+import Distributions
+import Distributions: pdf, mode
+import Statistics, StatsBase, LinearAlgebra, Random
+import Random: AbstractRNG, MersenneTwister
+using ProgressMeter
+using ComputationalResources
+using ComputationalResources: CPUProcesses
+
+# to be extended:
+import MLJBase: fit, update, clean!, fit!, predict, fitted_params,
+                show_as_constructed, ==
+import MLJModels: models
+import MLJScientificTypes
+
+## CONSTANTS
+
+const srcdir = dirname(@__FILE__)
 const CategoricalElement = Union{CategoricalString,CategoricalValue}
 
-include("utilities.jl")     # general purpose utilities
-include("metrics.jl")       # loss functions
-include("machines.jl")      # machine API
-include("networks.jl")      # for building learning networks
-include("composites.jl")    # composite models, incl. learning networks exported as models
-include("operations.jl")    # syntactic sugar for operations (predict, transform, etc)
-include("resampling.jl")    # evaluating models by assorted resampling strategies
-include("parameters.jl")    # hyper-parameter range constructors and nested hyper-parameter API
-include("tuning.jl")
+# FIXME replace with either Pkg.installed()["MLJ"] or uuid =
+# Pkg.project().dependencies["MLJ"] version =
+# Pkg.dependencies()[uuid].version --- this is currently messy because
+# it's been enacted then reverted see
+# https://github.com/JuliaLang/julia/pull/33410 and
+# https://github.com/JuliaLang/Pkg.jl/pull/1086/commits/996c6b9b69ef0c058e0105427983622b7cc8cb1d
+toml = Pkg.TOML.parsefile(joinpath(dirname(dirname(pathof(MLJ))),
+                                  "Project.toml"))
+const MLJ_VERSION = toml["version"]
+
+
+## INCLUDE FILES
+
 include("ensembles.jl")     # homogeneous ensembles
-include("tasks.jl")         # enhancements to task interface defined in MLJBase
-
-
-## LOAD BUILT-IN MODELS
-
-include("builtins/Transformers.jl")
-include("builtins/Constant.jl")
-include("builtins/KNN.jl")
-include("builtins/ridge.jl")
-
-## GET THE EXTERNAL MODEL METADATA AND MERGE WITH MLJ MODEL METADATA
-
-include("loading.jl")      # model metadata processing
-
-
-## SIMPLE PLOTTING RECIPE
-
-include("plotrecipes.jl")
+include("model_matching.jl")# inferring model search criterion from data
+include("scitypes.jl")      # extensions to ScientificTypes.scitype
 
 end # module

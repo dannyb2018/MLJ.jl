@@ -1,10 +1,11 @@
 # Built-in Transformers
 
-
 ```@docs
-MLJ.Transformers.UnivariateStandardizer
-MLJ.Transformers.Standardizer
-MLJ.Transformers.OneHotEncoder
-MLJ.Transformers.FeatureSelector
-MLJ.Transformers.UnivariateBoxCoxTransformer
+MLJModels.UnivariateStandardizer
+MLJModels.Standardizer
+MLJModels.OneHotEncoder
+MLJModels.FeatureSelector
+MLJModels.UnivariateBoxCoxTransformer
+MLJModels.UnivariateDiscretizer
+MLJModels.FillImputer
 ```

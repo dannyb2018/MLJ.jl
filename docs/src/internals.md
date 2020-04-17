@@ -1,13 +1,13 @@
 # Internals
 
-### The machine interface, simplified
+## The machine interface, simplified
 
 The following is simplified description of the `Machine`
 interface. See also the [Glossary](glossary.md)
 
-#### The Machine type
+### The Machine type
 
-````julia 
+````julia
 mutable struct Machine{M<Model}
 
     model::M
@@ -15,8 +15,8 @@ mutable struct Machine{M<Model}
     cache
     args::Tuple    # e.g., (X, y) for supervised models
     report
-    rows # remember last rows used 
-    
+    previous_rows # remember last rows used
+
     function Machine{M}(model::M, args...) where M<:Model
         machine = new{M}(model)
         machine.args = args
@@ -26,30 +26,31 @@ mutable struct Machine{M<Model}
 
 end
 ````
-    
-#### Constructor
+
+### Constructor
 
 ````julia
 machine(model::M, Xtable, y) = Machine{M}(model, Xtable, y)
 ````
 
-#### fit! and predict/transform
+### fit! and predict/transform
 
 ````julia
-function fit!(machine::Machine; rows=nothing, verbosity=1) 
+function fit!(machine::Machine; rows=nothing, force=false, verbosity=1)
 
     warning = clean!(mach.model)
-    isempty(warning) || verbosity < 0 || @warn warning 
+    isempty(warning) || verbosity < 0 || @warn warning
 
-    if rows == nothing
-        rows = (:) 
+    if rows === nothing
+        rows = (:)
     end
 
-    rows_have_changed  = (!isdefined(mach, :rows) || rows != mach.rows)
+    rows_have_changed  = (!isdefined(mach, :previous_rows) ||
+	    rows != mach.previous_rows)
 
     args = [MLJ.selectrows(arg, rows) for arg in mach.args]
-	
-    if !isdefined(mach, :fitresult) || rows_have_changed || force 
+
+    if !isdefined(mach, :fitresult) || rows_have_changed || force
         mach.fitresult, mach.cache, report =
             fit(mach.model, verbosity, args...)
     else # call `update`:
@@ -58,10 +59,10 @@ function fit!(machine::Machine; rows=nothing, verbosity=1)
     end
 
     if rows_have_changed
-        mach.rows = deepcopy(rows)
+        mach.previous_rows = deepcopy(rows)
     end
 
-    if report != nothing
+    if report !== nothing
         merge!(mach.report, report)
     end
 
@@ -85,7 +86,3 @@ function transform(machine::Machine{<:Unsupervised}, Xnew)
     end
 end
 ````
-
-
-
-

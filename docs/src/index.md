@@ -1,230 +1,353 @@
+### [Installation](https://github.com/alan-turing-institute/MLJ.jl/blob/master/README.md) | [Cheatsheet](mlj_cheatsheet.md) | [Workflows](common_mlj_workflows.md)
+
+
 # Getting Started
 
-### [Installation instructions](https://github.com/alan-turing-institute/MLJ.jl/blob/master/README.md)
 
-
-### Basic supervised training and testing
-
-
-```julia
-julia> using MLJ
-julia> using RDatasets
-julia> iris = dataset("datasets", "iris"); # a DataFrame
+```@setup doda
+import Random.seed!
+using MLJ
+using InteractiveUtils
+MLJ.color_off()
+seed!(1234)
 ```
 
-In MLJ one can either wrap data for supervised learning in a formal
-*task* (see [Working with Tasks](working_with_tasks.md)), or work
-directly with the data, split into its input and target parts:
+## Choosing and evaluating a model
 
+To load some demonstration data, add
+[RDatasets](https://github.com/JuliaStats/RDatasets.jl) to your load
+path and enter
+```@repl doda
+using RDatasets
+iris = dataset("datasets", "iris"); # a DataFrame
+```
+and then split the data into input and target parts:
 
-```julia
-julia> const X = iris[:, 1:4];
-julia> const y = iris[:, 5];
+```@repl doda
+using MLJ
+y, X = unpack(iris, ==(:Species), colname -> true);
+first(X, 3) |> pretty
 ```
 
-A *model* is a container for hyperparameters. Assuming the
-DecisionTree package is in your installation load path, we can
-instantiate a DecisionTreeClassifier model like this:
+To list all models available in MLJ's [model
+registry](model_search.md):
+
+```@repl doda
+models()
+```
+
+In MLJ a *model* is a struct storing the hyperparameters of the
+learning algorithm indicated by the struct name.  
+
+Assuming the DecisionTree.jl package is in your load path, we can use
+`@load` to load the code defining the `DecisionTreeClassifier` model
+type. This macro also returns an instance, with default
+hyperparameters.
+
+Drop the `verbosity=1` declaration for silent loading:
+
+```@repl doda
+tree_model = @load DecisionTreeClassifier verbosity=1
+```
+
+*Important:* DecisionTree.jl and most other packages implementing machine
+learning algorithms for use in MLJ are not MLJ dependencies. If such a
+package is not in your load path you will receive an error explaining
+how to add the package to your current environment.
+
+Once loaded, a model can be evaluated with the `evaluate` method:
+
+```@repl doda
+evaluate(tree_model, X, y,
+         resampling=CV(shuffle=true), measure=cross_entropy, verbosity=0)
+```
+
+Evaluating against multiple performance measures is also possible. See
+[Evaluating Model Performance](evaluating_model_performance.md) for details.
+
+
+## A preview of data type specification in MLJ
+
+The target `y` above is a categorical vector, which is appropriate
+because our model is a decision tree *classifier*:
+
+```@repl doda
+typeof(y)
+```
+
+However, MLJ models do not actually prescribe the machine types for
+the data they operate on. Rather, they specify a *scientific type*,
+which refers to the way data is to be *interpreted*, as opposed to how
+it is *encoded*:
 
 ```julia
-julia> @load DecisionTreeClassifier
-import MLJModels ✔
-import DecisionTree ✔
-import MLJModels.DecisionTree_.DecisionTreeClassifier ✔
-
-julia> tree_model = DecisionTreeClassifier(max_depth=2)
-DecisionTreeClassifier(pruning_purity = 1.0,
-                       max_depth = 2,
-                       min_samples_leaf = 1,
-                       min_samples_split = 2,
-                       min_purity_increase = 0.0,
-                       n_subfeatures = 0.0,
-                       display_depth = 5,
-                       post_prune = false,
-                       merge_purity_threshold = 0.9,) @ 1…85
+julia> info("DecisionTreeClassifier").target_scitype
+AbstractArray{<:Finite, 1}
 ```
-    
+
+Here `Finite` is an example of a "scalar" scientific type with two
+subtypes:
+
+```@repl doda
+subtypes(Finite)
+```
+
+We use the `scitype` function to check how MLJ is going to interpret
+given data. Our choice of encoding for `y` works for
+`DecisionTreeClassfier`, because we have:
+
+```@repl doda
+scitype(y)
+```
+
+and `Multiclass{3} <: Finite`. If we would encode with integers
+instead, we obtain:
+
+```@repl doda
+yint = Int.(y.refs);
+scitype(yint)
+```
+
+and using `yint` in place of `y` in classification problems will fail.
+
+For more on scientific types, see [Data containers and scientific
+types](@ref) below.
+
+
+## Fit and predict
+
+To illustrate MLJ's fit and predict interface, let's perform our
+performance evaluations by hand, but using a simple holdout set,
+instead of cross-validation.
+
 Wrapping the model in data creates a *machine* which will store
 training outcomes:
 
-```julia
-julia> tree = machine(tree_model, X, y)
-Machine{DecisionTreeClassifier} @ 9…45
+```@repl doda
+tree = machine(tree_model, X, y)
 ```
 
 Training and testing on a hold-out set:
 
-```julia
-julia> train, test = partition(eachindex(y), 0.7, shuffle=true); # 70:30 split
-julia> fit!(tree, rows=train)
-julia> yhat = predict(tree, X[test,:]);
-julia> misclassification_rate(yhat, y[test])
-
-[ Info: Training Machine{DecisionTreeClassifier} @ 9…45.
-Machine{DecisionTreeClassifier} @ 9…45
-
-0.044444444444444446
+```@repl doda
+train, test = partition(eachindex(y), 0.7, shuffle=true); # 70:30 split
+fit!(tree, rows=train);
+yhat = predict(tree, X[test,:]);
+yhat[3:5]
+cross_entropy(yhat, y[test]) |> mean
 ```
 
-Or, in one line:
+Notice that `yhat` is a vector of `Distribution` objects (because
+DecisionTreeClassifier makes probabilistic predictions). The methods
+of the [Distributions](https://github.com/JuliaStats/Distributions.jl)
+package can be applied to such distributions:
 
-```julia
-julia> evaluate!(tree, resampling=Holdout(fraction_train=0.7, shuffle=true), measure=misclassification_rate)
-0.08888888888888889
+```@repl doda
+broadcast(pdf, yhat[3:5], "virginica") # predicted probabilities of virginica
+mode.(yhat[3:5])
 ```
 
+Or, one can explicitly get modes by using `predict_mode` instead of
+`predict`:
+
+```@repl doda
+predict_mode(tree, rows=test[3:5])
+```
+
+Unsupervised models have a `transform` method instead of `predict`,
+and may optionally implement an `inverse_transform` method:
+
+```@repl doda
+v = [1, 2, 3, 4]
+stand_model = UnivariateStandardizer()
+stand = machine(stand_model, v)
+fit!(stand)
+w = transform(stand, v)
+inverse_transform(stand, w)
+```
+
+[Machines](machines.md) have an internal state which allows them to
+avoid redundant calculations when retrained, in certain conditions -
+for example when increasing the number of trees in a random forest, or
+the number of epochs in a neural network. The machine building syntax
+also anticipates a more general syntax for composing multiple models,
+as explained in [Composing Models](composing_models.md).
+
+There is a version of `evaluate` for machines as well as models. This
+time we'll add a second performance measure. (An exclamation point is
+added to the method name because machines are generally mutated when
+trained):
+
+```@repl doda
+evaluate!(tree, resampling=Holdout(fraction_train=0.7, shuffle=true),
+                measures=[cross_entropy, BrierScore()],
+                verbosity=0)
+```
 Changing a hyperparameter and re-evaluating:
 
-```julia
-julia> tree_model.max_depth = 3
-julia> evaluate!(tree, resampling=Holdout(fraction_train=0.5, shuffle=true), measure=misclassification_rate)
-0.06666666666666667
+```@repl doda
+tree_model.max_depth = 3
+evaluate!(tree, resampling=Holdout(fraction_train=0.7, shuffle=true),
+          measures=[cross_entropy, BrierScore()],
+          verbosity=0)
 ```
 
-### Next steps
+## Next steps
 
-To learn a little more about what MLJ can do, take the MLJ
-[tour](https://github.com/alan-turing-institute/MLJ.jl/blob/master/examples/tour/tour.ipynb),
-and then return to the manual as needed. Read at least the remainder
-of this page before considering serious use of MLJ.
+To learn a little more about what MLJ can do, browse [Common MLJ
+Workflows](common_mlj_workflows.md) or MLJ's
+[tutorials](https://alan-turing-institute.github.io/MLJTutorials/),
+returning to the manual as needed. *Read at least the remainder of
+this page before considering serious use of MLJ.*
 
 
-### Prerequisites
+## Prerequisites
 
-MLJ assumes some familiarity with the `CategoricalValue` and
-`CategoricalString` types from
+MLJ assumes some familiarity with
 [CategoricalArrays.jl](https://github.com/JuliaData/CategoricalArrays.jl),
-used here for representing categorical data. For probabilistic
-predictors, a basic acquaintance with
+used here for representing arrays of categorical data. For
+probabilistic predictors, a basic acquaintance with
 [Distributions.jl](https://github.com/JuliaStats/Distributions.jl) is
 also assumed.
 
 
-### Data containers and scientific types
+## Data containers and scientific types
 
 The MLJ user should acquaint themselves with some
 basic assumptions about the form of data expected by MLJ, as outlined
-below. 
+below.
 
 ```
-machine(model::Supervised, X, y) 
+machine(model::Supervised, X, y)
 machine(model::Unsupervised, X)
 ```
 
-**Multivariate input.** The input `X` in the above machine
-constructors can be any table, where *table* means any data type
-supporting the [Tables.jl](https://github.com/JuliaData/Tables.jl)
-interface.
+Each supervised model in MLJ declares the permitted *scientific type*
+of the inputs `X` and targets `y` that can be bound to it in the first
+constructor above, rather than specifying specific machine types (such
+as `Array{Float32, 2}`). Similar remarks apply to the input `X` of an
+unsupervised model.
 
-> At present our API is more restrictive; see this
-> [issue](https://github.com/JuliaData/Tables.jl/issues/74) with
-> Tables.jl. If your Tables.jl compatible format is not working in
-> MLJ, please post an issue.
+Scientific types are julia types defined in the package
+[ScientificTypes.jl](https://github.com/alan-turing-institute/ScientificTypes.jl);
+the package
+[MLJScientificTypes](https://github.com/alan-turing-institute/MLJScientificTypes.jl)
+implements the particular convention used in the MLJ universe for
+assigning a specific scientific type (interpretation) to each julia
+object (see the `scitype` examples below).
 
-In particular, `DataFrame`, `JuliaDB.IndexedTable` and
-`TypedTables.Table` objects are supported, as are two Julia native
-formats: *column tables* (named tuples of equal length vectors) and
-*row tables* (vectors of named tuples sharing the same
-keys).
+The basic "scalar" scientific types are `Continuous`, `Multiclass{N}`,
+`OrderedFactor{N}` and `Count`. Be sure you read [Container element
+types](@ref) below to be guarantee your scalar data is interpreted
+correctly. Tools exist to coerce the data to have the appropriate
+scientfic type; see
+[MLJScientificTypes.jl](https://github.com/alan-turing-institute/MLJScientificTypes.jl)
+or run `?coerce` for details.
 
-> Certain `JuliaDB.NDSparse` tables can be used for sparse data, but
-> this is experimental and undocumented.
+Additionally, most data containers - such as tuples,
+vectors, matrices and tables - have a scientific type.
 
-**Univariate input.** For models which handle only univariate inputs
-(`input_is_multivariate(model)=false`) `X` cannot be a table but is
-expected to be some `AbstractVector` type.
 
-**Targets.** The target `y` in the first constructor above must be an
-`AbstractVector`. A multivariate target `y` will be a vector of
-*tuples*. The tuples need not have uniform length, so some forms of
-sequence prediction are supported. Only the element types of `y`
-matter (the types of `y[j]` for each `j`). Indeed if a machine accepts
-`y` as an argument it will be just as happy with `identity.(y)`.
+![](img/scitypes.png)
 
-**Element types.** The types of input and target *elements* has strict
-consequences for MLJ's behaviour. 
+*Figure 1. Part of the scientific type hierarchy in* [ScientificTypes.jl](https://github.com/alan-turing-institute/ScientificTypes.jl).
 
-To articulate MLJ's conventions about data representation, MLJ
-distinguishes between *machine* data types on the one hand (`Float64`,
-`Bool`, `String`, etc) and *scientific data types* on the other,
-represented by new Julia types: `Continuous`, `Count`,
-`Multiclass{N}`, `OrderedFactor{N}` and `Unknown`, with obvious
-interpretations.  These types are organized in a type
-[hierarchy](scitypes.png) rooted in a new abstract type `Found`.
-
-A *scientific type* is any subtype of
-`Union{Missing,Found}`. Scientific types have no instances. (They are
-used behind the scenes is values for model trait functions.) Such
-types appear, for example, when querying model metadata:
-
-```julia
-julia> info("DecisionTreeClassifier")[:target_scitype_union]
+```@repl doda
+scitype(4.6)
+scitype(42)
+x1 = categorical(["yes", "no", "yes", "maybe"]);
+scitype(x1)
+X = (x1=x1, x2=rand(4), x3=rand(4))  # a "column table"
+scitype(X)
 ```
 
-```julia
-Finite
+### Tabular data
+
+All data containers compatible with the
+[Tables.jl](https://github.com/JuliaData/Tables.jl) interface (which
+includes all source formats listed
+[here](https://github.com/queryverse/IterableTables.jl)) have the
+scientific type `Table{K}`, where `K` depends on the scientific types
+of the columns, which can be individually inspected using `schema`:
+
+```@repl doda
+schema(X)
 ```
 
-```julia
-subtypes(Finite)
+### Inputs
+
+Since an MLJ model only specifies the scientific type of data, if that
+type is `Table` - which is the case for the majority of MLJ models -
+then any [Tables.jl](https://github.com/JuliaData/Tables.jl) format is
+permitted. However, the Tables.jl API excludes matrices. If `Xmatrix`
+is a matrix, convert it to a column table using `X =
+MLJ.table(Xmatrix)`.
+
+Specifically, the requirement for an arbitrary model's input is `scitype(X)
+<: input_scitype(model)`.
+
+### Targets
+
+The target `y` expected by MLJ models is generally an
+`AbstractVector`. A multivariate target `y` will generally be a table.
+
+Specifically, the type requirement for a model target is `scitype(y) <:
+target_scitype(model)`.
+
+### Querying a model for acceptable data types
+
+Given a model instance, one can inspect the admissible scientific
+types of its input and target, and without loading the code defining
+the model:
+
+```@setup doda
+tree = @load DecisionTreeClassifier
 ```
 
-```julia
-2-element Array{Any,1}:
- Multiclass   
- OrderedFactor
+```@repl doda
+i = info("DecisionTreeClassifier")
+i.input_scitype
+i.target_scitype
 ```
 
-This means that the scitype of all elements of `DecisionTreeClassier`
-target must be `Multiclass` or `OrderedFactor`.
+### Container element types
 
-To see how MLJ will interpret an object `x` appearing in table or
-vector input `X`, or target vector `y`, call `scitype(x)`. The fallback
-this function is `scitype(::Any) = Unknown`. 
+Models in MLJ will always apply the `MLJ` convention described in
+[MLJScientificTypes.jl](https://github.com/alan-turing-institute/MLJScientificTypes.jl)
+to decide how to interpret the elements of your container types. Here
+are the key features of that convention:
 
-```julia
-julia> (scitype(42), scitype(float(π)), scitype("Julia"))
-```
+- Any `AbstractFloat` is interpreted as `Continuous`.
 
-```julia
-(Count, Continuous, Unknown)
-```
-    
-The table below shows machine types that have scientific types
-different from `Unknown`:
+- Any `Integer` is interpreted as `Count`.
 
-`T`                         |     `scitype(x)` for `x::T`
-----------------------------|:--------------------------------
-`AbstractFloat`             |      `Continuous`
-`Integer`                   |        `Count`
-`CategoricalValue`          | `Multiclass{N}` where `N = nlevels(x)`, provided `x.pool.ordered == false` 
-`CategoricalString`         | `Multiclass{N}` where `N =p nlevels(x)`, provided `x.pool.ordered == false`
-`CategoricalValue`          | `OrderedFactor{N}` where `N = nlevels(x)`, provided `x.pool.ordered == true` 
-`CategoricalString`         | `OrderedFactor{N}` where `N = nlevels(x)` provided `x.pool.ordered == true`
-`Integer`                   | `Count`
-`Missing`                   | `Missing`
+- Any `CategoricalValue` or `CategoricalString`, `x`, is interpreted
+  as `Multiclass` or `OrderedFactor`, depending on the value of
+  `x.pool.ordered`.
 
-Here `nlevels(x) = length(levels(x.pool))`.
+- `String`s and `Char`s are *not* interpreted as `Multiclass` or
+  `OrderedFactor (they have scitypes `Textual` and `Unknown`
+  respectively). 
+  
+- In particular, *integers* (including `Bool`s) *cannot be used to
+  represent categorical data.* Use the preceding `coerce` operations
+  to coerce to a `Finite` scitype. 
 
-**Special note on using integers.** According to the above, integers
-cannot be used to represent `Multiclass` or `OrderedFactor` data. These can be represented by an unordered or ordered `CategoricalValue`
-or `CategoricalString` (automatic if they are elements of a
-`CategoricalArray`).
+Use `coerce(v, OrderedFactor)` or `coerce(v, Multiclass)` to coerce a
+vector `v` of integers, strings or characters to a vector with an
+appropriate `Finite` (categorical) scitype. For more on scitype
+coercion of arrays and tables, see `coerce`, `autotype` and `unpack`
+below.
 
-Methods exist to coerce the scientific type of a vector or table (see
-below). [Task](working_with_tasks.md) constructors also allow one to
-force the data being wrapped to have the desired scientific type.
-
-For more about scientific types and their role, see [Adding Models for
-General Use](adding_models_for_general_use.md)
-
+To designate an intrinsic "true" class for binary data (for purposes
+of applying MLJ measures, such as `truepositive`), data should be
+represented by an ordered `CategoricalValue` or
+`CategoricalString`. This data will have scitype `OrderedFactor{2}`
+and the "true" class is understood to be the *second* class in the
+ordering.
 
 ```@docs
 coerce
+autotype
+unpack
 ```
-
-
-
-
-
-
